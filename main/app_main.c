@@ -43,7 +43,10 @@ char *topic_publish = "topic/Test_Test_Test";
 char str_temperature[50];
 char str_humidity[50];
 char mqtt_buffer[buffer_size];
+char mqtt_temperature[buffer_size];
+char mqtt_humidity[buffer_size];
 
+void mqtt_format(void);
 
 static void log_error_if_nonzero(const char *message, int error_code)
 {
@@ -69,6 +72,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
     switch ((esp_mqtt_event_id_t)event_id) {
+    /*
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
         msg_id = esp_mqtt_client_publish(client, "topic/Test_Test_Test", "data_3", 0, 1, 0);
@@ -83,15 +87,17 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         msg_id = esp_mqtt_client_unsubscribe(client, "/topic/qos1");
         ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
         break;
+    */
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
         break;
-
+    /*
     case MQTT_EVENT_SUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
         msg_id = esp_mqtt_client_publish(client, "/topic/qos0", "data", 0, 0, 0);
         ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
         break;
+    */
     case MQTT_EVENT_UNSUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
         break;
@@ -158,21 +164,42 @@ static void mqtt_app_start(void)
     while(1) 
     {
         task_ssd1306_display_clear();
-
         sprintf(str_temperature, "Temperature:%d\n", DHT11_read().temperature); 
         sprintf(str_humidity, "Humidity:%d\n", DHT11_read().humidity);
 
         strcat(str_temperature, str_humidity);
-        strcat(mqtt_buffer, str_temperature);
 
-        task_ssd1306_display_text(mqtt_buffer);
+        task_ssd1306_display_text(str_temperature);
 
-        printf(mqtt_buffer); 
+        printf(str_temperature); 
 
-        esp_mqtt_client_publish(client, topic_publish, str_temperature, 0, 1, 0);
+        mqtt_format();
 
-        vTaskDelay(5000/portTICK_PERIOD_MS);
+        esp_mqtt_client_publish(client, topic_publish, mqtt_buffer, 0, 1, 0);
+
+        vTaskDelay(10000/portTICK_PERIOD_MS);
     }
+}
+
+void mqtt_format(void)
+{
+    for (int i=0; i<buffer_size; ++i)
+    {
+        mqtt_buffer[i]=0;
+        mqtt_temperature[i]=0;
+        mqtt_humidity[i]=0;
+    }
+
+    sprintf(mqtt_temperature, "%d", DHT11_read().temperature);
+    sprintf(mqtt_humidity, "%d", DHT11_read().humidity);
+
+    
+    strcat(mqtt_buffer, "{ \"Temperature\":");
+    strcat(mqtt_buffer, mqtt_temperature);
+    //strcat(mqtt_buffer, "\",");
+    strcat(mqtt_buffer, ", \"Humidity\":");
+    strcat(mqtt_buffer, mqtt_humidity);
+    strcat(mqtt_buffer, " }");
 }
 
 void app_main(void)
@@ -203,6 +230,5 @@ void app_main(void)
 
     i2c_master_init();
     ssd1306_init();
-
     mqtt_app_start();
 }
